@@ -9,7 +9,7 @@ COUNTDOWN_SECONDS=3
 TIME_ENTITY_SPECIFIER="%s%N"
 TIME_ENTITY_STR="nanoseconds"
 TIME_ENTITY_IN_S=1000000000
-
+SCORE_REDUCER=1000000
 DEP_CSVPEEK_RS="csvpeek-rs"
 DEP_MPV="mpv"
 DEP_COLUMN="column"
@@ -275,7 +275,7 @@ for question_data in "${quiz_questions_array[@]}"; do
             fi
         fi
         
-        current_question_points=$calculated_points
+        current_question_points=$((calculated_points/SCORE_REDUCER))
         if (( current_question_points <= 0 )); then # Ensure minimum 1 point if logic resulted in 0 or less
              current_question_points=1
         fi
