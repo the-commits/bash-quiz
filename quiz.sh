@@ -9,7 +9,7 @@ COUNTDOWN_SECONDS=3
 TIME_ENTITY_SPECIFIER="%s%N"
 TIME_ENTITY_STR="nanoseconds"
 TIME_ENTITY_IN_S=1000000000
-SCORE_REDUCER=100000000
+SCORE_REDUCER=10000000
 
 DEP_CSVPEEK_RS="csvpeek-rs"
 DEP_MPV="mpv"
@@ -310,11 +310,11 @@ if [ "$max_available_questions" -eq 0 ]; then
     exit 1
 fi
 
-read -p "Hello $player_name! There are $max_available_questions unique questions available. How many questions would you like to play in this quiz? " num_questions
+read -p "Hello $player_name! There are $max_available_questions unique questions available. How many questions would you like to play in this quiz(max 10)? " num_questions
 
-if ! [[ "$num_questions" =~ ^[0-9]+$ ]] || [ "$num_questions" -eq 0 ]; then
-    echo "Invalid number of questions. Playing 100 questions."
-    num_questions=100
+if ! [[ "$num_questions" =~ ^[0-9]+$ ]] || [ "$num_questions" -eq 0 ] || [ "$num_questions" -gt 10 ]; then
+    echo "Invalid number of questions. Playing 10 questions."
+    num_questions=10
 elif [ "$num_questions" -gt "$max_available_questions" ]; then
     echo "You requested $num_questions questions, but only $max_available_questions are available. Playing all $max_available_questions questions."
     num_questions="$max_available_questions"
@@ -350,7 +350,6 @@ for i in "${!quiz_questions_array[@]}"; do
             -o "$output_filename" \
             "$youtube_link_base" \
             --quiet --no-warnings --no-progress \
-            --download-archive "$CACHE_DIR/bash-quiz-archive.txt" \
             >/dev/null 2>&1
         if [ $? -ne 0 ]; then
             echo "Warning: Failed to download intro for '$youtube_link_full'. This question might be skipped or cause issues."
