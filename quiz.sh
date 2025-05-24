@@ -10,6 +10,7 @@ TIME_ENTITY_SPECIFIER="%s%N"
 TIME_ENTITY_STR="nanoseconds"
 TIME_ENTITY_IN_S=1000000000
 SCORE_REDUCER=1000000
+
 DEP_CSVPEEK_RS="csvpeek-rs"
 DEP_MPV="mpv"
 DEP_COLUMN="column"
@@ -33,15 +34,27 @@ check_dependency "$DEP_TPUT"
 
 show_highscore() {
     echo ""
-    echo "--- CURRENT HIGHSCORES ---"
-    local expected_header="Player,Points"
+    local figlet_width
+    figlet_width=$(tput cols)
+    if (( figlet_width > 40 )); then
+        "$DEP_FIGLET" -c -w "$figlet_width" "HIGH SCORES"
+    else
+        "$DEP_FIGLET" -c -f small "HIGH SCORES"
+    fi
+    echo ""
 
-    if [ ! -f "$HIGHSCORE_FILE" ]; then
-        echo "No highscore list exists yet. Be the first to play!"
+    local expected_header="Player,Points"
+    local default_scores_added=0
+
+    if [ ! -f "$HIGHSCORE_FILE" ] || [ ! -s "$HIGHSCORE_FILE" ]; then
+        echo "No highscore list, initializing with defaults..."
         echo "$expected_header" > "$HIGHSCORE_FILE"
-    elif [ ! -s "$HIGHSCORE_FILE" ]; then
-        echo "Highscore file was empty. Initializing with header."
-        echo "$expected_header" > "$HIGHSCORE_FILE"
+        echo "ACE,75000" >> "$HIGHSCORE_FILE"
+        echo "MAX,60000" >> "$HIGHSCORE_FILE"
+        echo "PRO,45000" >> "$HIGHSCORE_FILE"
+        echo "GAM,30000" >> "$HIGHSCORE_FILE"
+        echo "NEW,15000" >> "$HIGHSCORE_FILE"
+        default_scores_added=1
     elif ! head -n 1 "$HIGHSCORE_FILE" | grep -qF "$expected_header"; then
         echo "Warning: The highscore file's header ('$(head -n 1 "$HIGHSCORE_FILE")') does not match expected ('$expected_header')."
         echo "Attempting to proceed, but column selection might fail."
@@ -49,14 +62,12 @@ show_highscore() {
 
     local sorted_data=""
     local low_score=""
-
     local all_points_values
     all_points_values=$("$DEP_CSVPEEK_RS" -f "$HIGHSCORE_FILE" --list -c "Points" --raw 2>/dev/null)
 
     if [ -n "$all_points_values" ]; then
         local top_10_score_lines
         top_10_score_lines=$(echo "$all_points_values" | grep '^[0-9]\+$' | sort -n -r | head -n 10)
-
         if [ -n "$top_10_score_lines" ]; then
             low_score=$(echo "$top_10_score_lines" | tail -n 1)
         fi
@@ -65,23 +76,50 @@ show_highscore() {
     if [ -n "$low_score" ]; then
         local candidates_tab_data
         candidates_tab_data=$("$DEP_CSVPEEK_RS" --list -f "$HIGHSCORE_FILE" -c "Player,Points" --filter "Points>=$low_score" --raw 2>/dev/null)
-
         if [ -n "$candidates_tab_data" ]; then
             local sorted_tab_data
             sorted_tab_data=$(echo "$candidates_tab_data" | LC_ALL=C sort -t$'\t' -k2,2nr | head -n 10)
-
             if [ -n "$sorted_tab_data" ]; then
                 sorted_data=$(echo "$sorted_tab_data" | tr '\t' ',')
             fi
         fi
     fi
-
-    if [ -z "$sorted_data" ]; then
-        echo "No highscores to display."
-        (echo "$expected_header") | "$DEP_COLUMN" -t -s ','
-    else
-        (echo "$expected_header" && echo "$sorted_data") | "$DEP_COLUMN" -t -s ','
+    
+    if [ -z "$sorted_data" ] && [ "$default_scores_added" -eq 1 ]; then
+        all_points_values=$("$DEP_CSVPEEK_RS" -f "$HIGHSCORE_FILE" --list -c "Points" --raw 2>/dev/null)
+        if [ -n "$all_points_values" ]; then 
+            top_10_score_lines=$(echo "$all_points_values" | grep '^[0-9]\+$' | sort -n -r | head -n 10)
+            if [ -n "$top_10_score_lines" ]; then 
+                low_score=$(echo "$top_10_score_lines" | tail -n 1)
+                if [ -n "$low_score" ]; then 
+                    candidates_tab_data=$("$DEP_CSVPEEK_RS" --list -f "$HIGHSCORE_FILE" -c "Player,Points" --filter "Points>=$low_score" --raw 2>/dev/null)
+                    if [ -n "$candidates_tab_data" ]; then 
+                        sorted_tab_data=$(echo "$candidates_tab_data" | LC_ALL=C sort -t$'\t' -k2,2nr | head -n 10)
+                        if [ -n "$sorted_tab_data" ]; then 
+                             sorted_data=$(echo "$sorted_tab_data" | tr '\t' ',')
+                        fi
+                    fi
+                fi
+            fi
+        fi
     fi
+
+    if [ -n "$sorted_data" ]; then
+        printf "%-6s %-10s %10s\n" "RANK" "PLAYER" "SCORE"
+        printf "%-6s %-10s %10s\n" "------" "----------" "----------"
+        local rank=1
+        echo "$sorted_data" | while IFS=',' read -r player points; do
+            local player_display="${player:0:10}" 
+            printf " %3d.  %-10s %10s\n" "$rank" "$player_display" "$points"
+            ((rank++))
+        done
+    else
+        echo "No highscores to display or list is empty." 
+        printf "%-6s %-10s %10s\n" "RANK" "PLAYER" "SCORE" 
+        printf "%-6s %-10s %10s\n" "------" "----------" "----------"
+    fi
+
+    echo ""
     echo "--------------------------"
     echo ""
 }
@@ -93,8 +131,6 @@ cleanup_cache() {
         echo "Cleanup complete."
     fi
 }
-
-trap cleanup_cache EXIT
 
 countdown_display() {
     local q_count="$1"
@@ -124,15 +160,122 @@ countdown_display() {
     clear
 }
 
+get_arcade_initials() {
+    local initials_arr=("A" "A" "A")
+    local current_idx=0
+    local char key_seq_part1 key_seq_part2
+    local old_stty_cfg
+    
+    old_stty_cfg=$(stty -g)
+    stty raw -echo 
+
+    redraw_on_tty() {
+        tput rc > /dev/tty
+        tput el > /dev/tty
+        echo -n "${initials_arr[0]}${initials_arr[1]}${initials_arr[2]}" > /dev/tty
+        
+        tput rc > /dev/tty
+        if [[ $current_idx -gt 0 ]]; then
+            tput cuf "$current_idx" > /dev/tty
+        fi
+    }
+
+    tput sc > /dev/tty 
+    redraw_on_tty
+
+    while true; do
+        tput rc > /dev/tty
+        if [[ $current_idx -gt 0 ]]; then
+            tput cuf "$current_idx" > /dev/tty
+        fi
+
+        read -r -s -n1 char < /dev/tty
+
+        if [[ -z "$char" ]]; then
+            break 
+        fi
+
+        local char_processed=0
+
+        if [[ "$char" == $'\e' ]]; then
+            read -r -s -n1 -t 0.1 key_seq_part1 < /dev/tty
+            if [[ "$key_seq_part1" == "[" ]]; then
+                read -r -s -n1 -t 0.1 key_seq_part2 < /dev/tty
+                case "$key_seq_part2" in
+                    A) # Uppil
+                        local ord_val cur_char_ascii
+                        cur_char_ascii=$(printf "%d" "'${initials_arr[$current_idx]}")
+                        if (( cur_char_ascii >= $(printf "%d" "'A") && cur_char_ascii <= $(printf "%d" "'Z") )); then # Cykla A-Z
+                            ord_val=$((cur_char_ascii - 1))
+                            if (( ord_val < $(printf "%d" "'A") )); then ord_val=$(printf "%d" "'Z"); fi
+                            initials_arr[$current_idx]=$(printf "\\$(printf '%03o' "$ord_val")")
+                            char_processed=1
+                        elif (( cur_char_ascii >= $(printf "%d" "'0") && cur_char_ascii <= $(printf "%d" "'9") )); then # Cykla 0-9
+                            ord_val=$((cur_char_ascii - 1))
+                            if (( ord_val < $(printf "%d" "'0") )); then ord_val=$(printf "%d" "'9"); fi
+                            initials_arr[$current_idx]=$(printf "\\$(printf '%03o' "$ord_val")")
+                            char_processed=1
+                        fi
+                        ;;
+                    B) # Nedpil
+                        local ord_val cur_char_ascii
+                        cur_char_ascii=$(printf "%d" "'${initials_arr[$current_idx]}")
+                        if (( cur_char_ascii >= $(printf "%d" "'A") && cur_char_ascii <= $(printf "%d" "'Z") )); then # Cykla A-Z
+                            ord_val=$((cur_char_ascii + 1))
+                            if (( ord_val > $(printf "%d" "'Z") )); then ord_val=$(printf "%d" "'A"); fi
+                            initials_arr[$current_idx]=$(printf "\\$(printf '%03o' "$ord_val")")
+                            char_processed=1
+                        elif (( cur_char_ascii >= $(printf "%d" "'0") && cur_char_ascii <= $(printf "%d" "'9") )); then # Cykla 0-9
+                            ord_val=$((cur_char_ascii + 1))
+                            if (( ord_val > $(printf "%d" "'9") )); then ord_val=$(printf "%d" "'0"); fi
+                            initials_arr[$current_idx]=$(printf "\\$(printf '%03o' "$ord_val")")
+                            char_processed=1
+                        fi
+                        ;;
+                    C) # Högerpil
+                        current_idx=$(( (current_idx + 1) % 3 ))
+                        char_processed=1 
+                        ;;
+                    D) # Vänsterpil
+                        current_idx=$(( (current_idx - 1 + 3) % 3 ))
+                        char_processed=1
+                        ;;
+                esac
+            fi
+        else # Vanlig teckeninmatning
+            local char_upper
+            char_upper=$(echo "$char" | tr '[:lower:]' '[:upper:]' | tr -dc 'A-Z0-9')
+            if [[ -n "$char_upper" ]]; then
+                initials_arr[$current_idx]="$char_upper"
+                if [[ $current_idx -lt 2 ]]; then 
+                    current_idx=$((current_idx + 1))
+                fi
+                char_processed=1
+            fi
+        fi
+        
+        if (( char_processed == 1 )); then
+            redraw_on_tty
+        fi
+    done
+    
+    stty "$old_stty_cfg"
+    tput rc > /dev/tty
+    tput el > /dev/tty
+    echo -n "${initials_arr[0]}${initials_arr[1]}${initials_arr[2]}" > /dev/tty
+    printf "%s%s%s" "${initials_arr[0]}" "${initials_arr[1]}" "${initials_arr[2]}"
+}
+
+trap cleanup_cache EXIT
+
 echo "Welcome to Guess the Song – Ultimate Intro Challenge!"
 
-read -p "Enter your name: " player_name
-if [ -z "$player_name" ]; then
-    player_name="Anonymous Player"
-    echo "No name entered, you will play as '$player_name'."
-fi
-
 show_highscore
+
+echo -n "Enter Your Handle: "
+player_name=$(get_arcade_initials)
+echo 
+echo "Playing as '$player_name'."
 
 all_questions_raw=$("$DEP_CSVPEEK_RS" --list -f "$QUIZ_FILE" -c "Artist,Title,YouTubeLink,Option1,Option2,Option3,Option4,Option5" --raw)
 
@@ -262,10 +405,10 @@ for question_data in "${quiz_questions_array[@]}"; do
         intro_duration_ns=$((INTRO_DURATION * TIME_ENTITY_IN_S))
         time_saved_ns=$((intro_duration_ns - response_time))
         
-        calculated_points=$TIME_ENTITY_IN_S # Default minimum points for a correct answer if answered very slow / time_saved_ns is not positive
+        calculated_points=$TIME_ENTITY_IN_S 
 
         if (( time_saved_ns > 0 )); then
-            calculated_points=$time_saved_ns # Base for >15s, effectively time_saved_ns * 1
+            calculated_points=$time_saved_ns 
             if (( response_time <= 5 * TIME_ENTITY_IN_S )); then
                 calculated_points=$((time_saved_ns * 5))
             elif (( response_time <= 10 * TIME_ENTITY_IN_S )); then
@@ -276,7 +419,7 @@ for question_data in "${quiz_questions_array[@]}"; do
         fi
         
         current_question_points=$((calculated_points/SCORE_REDUCER))
-        if (( current_question_points <= 0 )); then # Ensure minimum 1 point if logic resulted in 0 or less
+        if (( current_question_points <= 0 )); then 
              current_question_points=1
         fi
 
