@@ -12,4 +12,5 @@ A music quiz written in bash for the terminal
 
 ### Install
 `$ cargo install csvpeek-rs`
+
 Install with your prefered package manager `mpv column yt-dlp figlet tput`
