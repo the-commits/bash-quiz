@@ -130,11 +130,26 @@ show_highscore() {
 }
 
 cleanup_cache() {
+  local clear_cache
+  read -p "Do you want to clear the cache? [Y/n] " clear_cache
+
+  if [[ -z "$clear_cache" || "$clear_cache" =~ ^[Yy]$ ]]; then
     if [ -d "$CACHE_DIR" ]; then
-        echo "Cleaning up temporary audio files in $CACHE_DIR..."
-        rm -rf "$CACHE_DIR"
+      echo "Cleaning up temporary audio files in '$CACHE_DIR'..."
+      if rm -rf "$CACHE_DIR"; then
         echo "Cleanup complete."
+      else
+        echo "Error: Failed to remove '$CACHE_DIR'." >&2
+        return 1
+      fi
+    else
+      echo "Cache directory '$CACHE_DIR' not found. Nothing to clean."
     fi
+  else
+    echo "Cache cleanup skipped."
+  fi
+
+  echo "Bye!"
 }
 
 countdown_display() {
@@ -298,8 +313,8 @@ fi
 read -p "Hello $player_name! There are $max_available_questions unique questions available. How many questions would you like to play in this quiz? " num_questions
 
 if ! [[ "$num_questions" =~ ^[0-9]+$ ]] || [ "$num_questions" -eq 0 ]; then
-    echo "Invalid number of questions. Playing 5 questions."
-    num_questions=5
+    echo "Invalid number of questions. Playing 100 questions."
+    num_questions=100
 elif [ "$num_questions" -gt "$max_available_questions" ]; then
     echo "You requested $num_questions questions, but only $max_available_questions are available. Playing all $max_available_questions questions."
     num_questions="$max_available_questions"
@@ -335,6 +350,7 @@ for i in "${!quiz_questions_array[@]}"; do
             -o "$output_filename" \
             "$youtube_link_base" \
             --quiet --no-warnings --no-progress \
+            --download-archive "$CACHE_DIR/bash-quiz-archive.txt" \
             >/dev/null 2>&1
         if [ $? -ne 0 ]; then
             echo "Warning: Failed to download intro for '$youtube_link_full'. This question might be skipped or cause issues."
