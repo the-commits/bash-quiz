@@ -49,11 +49,16 @@ show_highscore() {
     if [ ! -f "$HIGHSCORE_FILE" ] || [ ! -s "$HIGHSCORE_FILE" ]; then
         echo "No highscore list, initializing with defaults..."
         echo "$expected_header" > "$HIGHSCORE_FILE"
-        echo "ACE,75000" >> "$HIGHSCORE_FILE"
-        echo "MAX,60000" >> "$HIGHSCORE_FILE"
-        echo "PRO,45000" >> "$HIGHSCORE_FILE"
-        echo "GAM,30000" >> "$HIGHSCORE_FILE"
-        echo "NEW,15000" >> "$HIGHSCORE_FILE"
+        echo "ACE,100000" >> "$HIGHSCORE_FILE"
+        echo "MAX,75000" >> "$HIGHSCORE_FILE"
+        echo "PRO,50000" >> "$HIGHSCORE_FILE"
+        echo "GAM,40000" >> "$HIGHSCORE_FILE"
+        echo "NEW,35000" >> "$HIGHSCORE_FILE"
+        echo "BAD,30000" >> "$HIGHSCORE_FILE"
+        echo "BXX,25000" >> "$HIGHSCORE_FILE"
+        echo "DDD,20000" >> "$HIGHSCORE_FILE"
+        echo "CCC,15000" >> "$HIGHSCORE_FILE"
+        echo "BBB,10000" >> "$HIGHSCORE_FILE"
         default_scores_added=1
     elif ! head -n 1 "$HIGHSCORE_FILE" | grep -qF "$expected_header"; then
         echo "Warning: The highscore file's header ('$(head -n 1 "$HIGHSCORE_FILE")') does not match expected ('$expected_header')."
@@ -393,7 +398,7 @@ for question_data in "${quiz_questions_array[@]}"; do
     if ! [[ "$user_choice" =~ ^[0-9]+$ ]] || [ "$user_choice" -lt 1 ] || [ "$user_choice" -gt "$num_shuffled_options" ]; then
         echo "Invalid choice. Please enter a number between 1 and $num_shuffled_options."
         echo "The correct answer was: '$correct_answer'."
-        echo "You answered in $response_time $TIME_ENTITY_STR."
+        echo "You answered in $((response_time/TIME_ENTITY_IN_S)) seconds."
         echo ""
         continue
     fi
@@ -423,7 +428,7 @@ for question_data in "${quiz_questions_array[@]}"; do
              current_question_points=1
         fi
 
-        echo "CONGRATULATIONS! Correct answer in $response_time $TIME_ENTITY_STR! You earned $current_question_points points."
+        echo "CONGRATULATIONS! Correct answer in $((response_time/TIME_ENTITY_IN_S)) seconds! You earned $current_question_points points."
         ((total_score+=current_question_points))
     else
         echo "Sorry, that was incorrect. The correct answer was: '$correct_answer'."
